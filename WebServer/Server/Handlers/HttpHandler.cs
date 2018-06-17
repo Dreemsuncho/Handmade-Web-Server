@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using WebServer.Server.Handlers.Contracts;
 using WebServer.Server.HTTP.Contracts;
@@ -15,23 +16,28 @@ namespace WebServer.Server.Handlers
             _serverRouteConfig = serverRouteConfig;
         }
 
+
         public IHttpResponse Handle(IHttpContext httpContext)
         {
-            foreach (var kvp in _serverRouteConfig.Routes[httpContext.Request.RequestMethod])
+
+            Dictionary<string, IRoutingContext> routes = _serverRouteConfig.Routes[httpContext.Request.RequestMethod];
+
+            foreach (var kvp in routes)
             {
-                string pattern = kvp.Key;
-                var regex = new Regex(pattern);
-                var match = regex.Match(httpContext.Request.Path);
+                IRoutingContext routingContext = kvp.Value;
+                IHttpRequest httpRequest = httpContext.Request;
+
+                var routingPattern = kvp.Key;
+                var regex = new Regex(routingPattern);
+                var match = regex.Match(httpRequest.Path);
 
                 if (!match.Success)
                     continue;
 
-                foreach (var param in kvp.Value.Parameters)
-                {
-                    httpContext.Request.AddUrlParameters(param, match.Groups[param].Value);
-                }
+                foreach (string param in routingContext.Parameters)
+                    httpRequest.AddUrlParameters(param, match.Groups[param].Value);
 
-                return kvp.Value.RequestHandler.Handle(httpContext);
+                return routingContext.RequestHandler.Handle(httpContext);
             }
 
             throw new NotImplementedException();
