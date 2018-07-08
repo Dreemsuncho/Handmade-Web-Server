@@ -5,7 +5,7 @@ namespace WebServer.Server.Handlers
 {
     public class PostHandler : RequestHandler
     {
-        public PostHandler(Func<IHttpResponse> f)
+        public PostHandler(Func<IHttpRequest, IHttpResponse> f)
             : base(f)
         {
         }

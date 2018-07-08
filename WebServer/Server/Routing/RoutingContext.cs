@@ -9,8 +9,8 @@ namespace WebServer.Server.Routing
     {
         public RoutingContext(RequestHandler handler, IEnumerable<string> parameters)
         {
-            ValidatorEmptyNull.ThrowIfNull(handler, nameof(handler));
-            ValidatorEmptyNull.ThrowIfNull(parameters, nameof(parameters));
+            CoreValidator.ThrowIfNull(handler, nameof(handler));
+            CoreValidator.ThrowIfNull(parameters, nameof(parameters));
 
             RequestHandler = handler;
             Parameters = parameters;

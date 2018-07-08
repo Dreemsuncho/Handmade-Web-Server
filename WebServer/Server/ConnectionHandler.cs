@@ -2,6 +2,7 @@
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
+using WebServer.Server.Common;
 using WebServer.Server.Handlers;
 using WebServer.Server.HTTP;
 using WebServer.Server.HTTP.Contracts;
@@ -13,13 +14,15 @@ namespace WebServer.Server
     public class ConnectionHandler
     {
         private readonly Socket _client;
-
         private readonly IServerRouteConfig _serverRouteConfig;
 
 
-        public ConnectionHandler(Socket socket, IServerRouteConfig serverRouteConfig)
+        public ConnectionHandler(Socket client, IServerRouteConfig serverRouteConfig)
         {
-            _client = socket;
+            CoreValidator.ThrowIfNull(client, nameof(client));
+            CoreValidator.ThrowIfNull(serverRouteConfig, nameof(serverRouteConfig));
+
+            _client = client;
             _serverRouteConfig = serverRouteConfig;
         }
 
@@ -28,16 +31,23 @@ namespace WebServer.Server
         {
             string request = await _ReadRequest();
 
-            var httpContext = new HttpContext(request);
+            if (request != string.Empty)
+            {
+                var httpContext = new HttpContext(request);
+                var httpHandler = new HttpHandler(_serverRouteConfig);
 
-            IHttpResponse response = new HttpHandler(_serverRouteConfig).Handle(httpContext);
+                IHttpResponse response = httpHandler.Handle(httpContext);
 
-            ArraySegment<byte> toBytes = new ArraySegment<byte>(Encoding.ASCII.GetBytes(response.Response));
+                var byteSegments = new ArraySegment<byte>(Encoding.ASCII.GetBytes(response.Response));
 
-            await _client.SendAsync(toBytes, SocketFlags.None);
+                await _client.SendAsync(byteSegments, SocketFlags.None);
 
-            Console.WriteLine(request);
-            Console.WriteLine(response.Response);
+                Console.WriteLine($"-----REQUEST-----");
+                Console.WriteLine(request);
+                Console.WriteLine($"-----RESPONSE-----");
+                Console.WriteLine(response);
+                Console.WriteLine();
+            }
 
             _client.Shutdown(SocketShutdown.Both);
         }

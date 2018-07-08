@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
+using WebServer.Server.Common;
 using WebServer.Server.Enums;
 using WebServer.Server.Exceptions;
 using WebServer.Server.HTTP.Contracts;
@@ -9,47 +11,65 @@ namespace WebServer.Server.HTTP
 {
     public class HttpRequest : IHttpRequest
     {
+        private readonly string _requestText;
+
         public HttpRequest(string requestString)
         {
-            HeaderCollection = new HttpHeaderCollection();
+            Headers = new HttpHeaderCollection();
             UrlParameters = new Dictionary<string, string>();
             QueryParameters = new Dictionary<string, string>();
             FormData = new Dictionary<string, string>();
+            Cookies = new HttpCookieCollection();
+
+            _requestText = requestString;
 
             _ParseRequest(requestString);
         }
 
 
-        public Dictionary<string, string> FormData { get; }
+        public IDictionary<string, string> FormData { get; }
 
-        public HttpHeaderCollection HeaderCollection { get; }
+        public IHttpHeaderCollection Headers { get; }
 
-        public string Path { get; set; }
+        public IHttpCookieCollection Cookies { get; }
 
-        public Dictionary<string, string> QueryParameters { get; }
+        public IDictionary<string, string> QueryParameters { get; }
+
+        public IDictionary<string, string> UrlParameters { get; }
 
         public HttpRequestMethod RequestMethod { get; private set; }
 
+        public IHttpSession Session { get; set; }
+
+        public string Path { get; private set; }
+
         public string Url { get; private set; }
 
-        public Dictionary<string, string> UrlParameters { get; }
 
         public void AddUrlParameters(string key, string value)
         {
+            CoreValidator.ThrowIfNullOrEmpty(key, nameof(key));
+            CoreValidator.ThrowIfNullOrEmpty(value, nameof(value));
+
             UrlParameters.Add(key, value);
         }
+
 
         private void _ParseRequest(string requestString)
         {
             string[] requestLines = requestString.Split(Environment.NewLine);
 
+            if (!requestLines.Any())
+            {
+                BadRequestException.ThrowFromInvalidRequest();
+            }
+
             string[] requestLine = requestLines[0].Trim()
                 .Split(" ", StringSplitOptions.RemoveEmptyEntries);
 
-            if (requestLine.Length != 3 ||
-                requestLine[2].ToLower() != "http/1.1")
+            if (requestLine.Length != 3 || requestLine[2].ToLower() != "http/1.1")
             {
-                throw new BadRequestException("Invalid request line");
+                BadRequestException.ThrowFromInvalidRequest();
             }
 
             RequestMethod = _ParseRequestMethod(requestLine[0].ToUpper());
@@ -57,11 +77,47 @@ namespace WebServer.Server.HTTP
             Path = Url.Split("?#".ToCharArray(), StringSplitOptions.RemoveEmptyEntries)[0];
 
             _ParseHeaders(requestLines);
+            _ParseCookies();
             _ParseParameters();
 
             if (RequestMethod == HttpRequestMethod.POST)
-                _ParseQuery(requestLines[requestLines.Length - 1], FormData);
+                _ParseQuery(requestLines.Last(), FormData);
+
+            _SetSession();
         }
+
+
+        private void _ParseCookies()
+        {
+            if (Headers.ContainsKey(HttpHeader.Cookie))
+            {
+                var cookies = Headers.Get(HttpHeader.Cookie);
+
+                foreach (var cookie in cookies)
+                {
+                    if (!cookie.Value.Contains('='))
+                        return;
+
+                    var cookieArgs = cookie.Value
+                        .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                        .ToList();
+
+                    foreach (var cookieArg in cookieArgs)
+                    {
+                        var cookieKeyValuePair = cookieArg.Split(new[] { '=' }, StringSplitOptions.RemoveEmptyEntries);
+
+                        if (cookieKeyValuePair.Length == 2)
+                        {
+                            var key = cookieKeyValuePair[0].Trim();
+                            var value = cookieKeyValuePair[1].Trim();
+
+                            Cookies.Add(new HttpCookie(key, value, isNew: false));
+                        }
+                    }
+                }
+            }
+        }
+
 
         private void _ParseParameters()
         {
@@ -72,7 +128,8 @@ namespace WebServer.Server.HTTP
             _ParseQuery(query, QueryParameters);
         }
 
-        private void _ParseQuery(string query, Dictionary<string, string> queryParameters)
+
+        private void _ParseQuery(string query, IDictionary<string, string> queryParameters)
         {
             if (!query.Contains("="))
                 return;
@@ -81,6 +138,7 @@ namespace WebServer.Server.HTTP
             foreach (var qp in queryPairs)
             {
                 var queryArgs = qp.Split('=');
+
                 if (queryArgs.Length != 2)
                     continue;
 
@@ -89,6 +147,7 @@ namespace WebServer.Server.HTTP
                     WebUtility.UrlDecode(queryArgs[1]));
             }
         }
+
 
         private void _ParseHeaders(string[] requestLines)
         {
@@ -99,18 +158,23 @@ namespace WebServer.Server.HTTP
             {
                 string[] headerArgs = requestLines[i].Split(": ");
 
+                if (headerArgs.Length != 2)
+                    BadRequestException.ThrowFromInvalidRequest();
+
                 string key = headerArgs[0];
                 string value = headerArgs[1];
 
-                HeaderCollection.Add(new HttpHeader(key, value));
+                Headers.Add(new HttpHeader(key, value));
 
-                if (key.ToLower() == "host")
+                if (key.ToLower() == HttpHeader.Host.ToLower())
                     hasHostHeader = true;
             }
 
+
             if (!hasHostHeader)
-                throw new BadRequestException("Missing host header");
+                BadRequestException.ThrowFromInvalidRequest();
         }
+
 
         private HttpRequestMethod _ParseRequestMethod(string requestMethod)
         {
@@ -119,7 +183,7 @@ namespace WebServer.Server.HTTP
                 case "GET":
                     return HttpRequestMethod.GET;
                 case "POST":
-                    return HttpRequestMethod.GET;
+                    return HttpRequestMethod.POST;
                 case "PUT":
                     return HttpRequestMethod.PUT;
                 case "DELETE":
@@ -129,5 +193,20 @@ namespace WebServer.Server.HTTP
                     throw new BadRequestException("Cannot recognize request method");
             }
         }
+
+
+        private void _SetSession()
+        {
+            if (Cookies.ContainsKey(SessionStore.SessionCookieKey))
+            {
+                var cookie = Cookies.Get(SessionStore.SessionCookieKey);
+                var sessionId = cookie.Value;
+
+                Session = SessionStore.GetOrAdd(id: sessionId);
+            }
+        }
+
+
+        public override string ToString() => _requestText;
     }
 }

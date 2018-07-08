@@ -4,7 +4,14 @@ namespace WebServer.Server.Exceptions
 {
     class BadRequestException : Exception
     {
-        public BadRequestException(string message)
-            : base(message) { }
+        private const string InvalidRequestMessage = "Request is not valid.";
+
+        public BadRequestException(string message) : base(message)
+        {
+
+        }
+
+        public static object ThrowFromInvalidRequest()
+            => throw new BadRequestException(InvalidRequestMessage);
     }
 }

@@ -2,7 +2,7 @@
 
 namespace WebServer.Server.Common
 {
-    internal static class ValidatorEmptyNull
+    internal static class CoreValidator
     {
         public static void ThrowIfNull(object obj, string name)
         {

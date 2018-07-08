@@ -2,7 +2,13 @@
 {
     public interface IHttpResponse
     {
-        void AddHeader(string key, string value);
         string Response { get; }
+
+        void SetCookies();
+
+        void AddHeader(string key, string value);
+
+        bool ContainsHeader(string key);
+
     }
 }

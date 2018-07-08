@@ -36,16 +36,16 @@ namespace WebServer.Server.Routing
 
         private void _InitializeServerConfig(IAppRouteConfig appRouteConfig)
         {
-            foreach (KeyValuePair<HttpRequestMethod, Dictionary<string, RequestHandler>> kvp in appRouteConfig.Routes)
+            foreach (var route in appRouteConfig.Routes)
             {
-                foreach (KeyValuePair<string, RequestHandler> reqHandler in kvp.Value)
+                foreach (KeyValuePair<string, RequestHandler> reqHandler in route.Value)
                 {
                     var parameters = new List<string>();
 
                     string parsedRegex = _ParseRoute(reqHandler.Key, parameters);
 
                     var routingContext = new RoutingContext(reqHandler.Value, parameters);
-                    Routes[kvp.Key].Add(parsedRegex, routingContext);
+                    Routes[route.Key].Add(parsedRegex, routingContext);
                 }
             }
 

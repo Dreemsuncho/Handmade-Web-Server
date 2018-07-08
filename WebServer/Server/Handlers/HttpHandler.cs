@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using WebServer.Server.Handlers.Contracts;
 using WebServer.Server.HTTP.Contracts;
+using WebServer.Server.HTTP.Response;
 using WebServer.Server.Routing.Contracts;
 
 namespace WebServer.Server.Handlers
@@ -19,28 +21,34 @@ namespace WebServer.Server.Handlers
 
         public IHttpResponse Handle(IHttpContext httpContext)
         {
+            var routes = _serverRouteConfig.Routes[httpContext.Request.RequestMethod];
+            var request = httpContext.Request;
 
-            Dictionary<string, IRoutingContext> routes = _serverRouteConfig.Routes[httpContext.Request.RequestMethod];
-
-            foreach (var kvp in routes)
+            try
             {
-                IRoutingContext routingContext = kvp.Value;
-                IHttpRequest httpRequest = httpContext.Request;
+                foreach (var kvp in routes)
+                {
+                    var routingPattern = kvp.Key;
+                    var routingContext = kvp.Value;
 
-                var routingPattern = kvp.Key;
-                var regex = new Regex(routingPattern);
-                var match = regex.Match(httpRequest.Path);
+                    var regex = new Regex(routingPattern);
+                    var match = regex.Match(request.Path);
 
-                if (!match.Success)
-                    continue;
+                    if (!match.Success) continue;
 
-                foreach (string param in routingContext.Parameters)
-                    httpRequest.AddUrlParameters(param, match.Groups[param].Value);
+                    routingContext.Parameters.ToList().ForEach(param =>
+                        request.AddUrlParameters(param, match.Groups[param].Value)
+                    );
 
-                return routingContext.RequestHandler.Handle(httpContext);
+                    return routingContext.RequestHandler.Handle(httpContext);
+                }
+            }
+            catch (Exception ex)
+            {
+                return new InternalServerErrorResponse(ex);
             }
 
-            throw new NotImplementedException();
+            return new NotFoundResponse();
         }
     }
 }

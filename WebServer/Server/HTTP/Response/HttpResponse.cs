@@ -9,9 +9,11 @@ namespace WebServer.Server.HTTP.Response
     {
         private readonly IView _view;
 
+        private HttpStatusCode _statusCode = HttpStatusCode.Found;
+
         private readonly HttpHeaderCollection _headerCollection = new HttpHeaderCollection();
 
-        private HttpStatusCode _statusCode = HttpStatusCode.Found;
+        private readonly HttpCookieCollection _cookieCollection = new HttpCookieCollection();
 
 
         public HttpResponse(string redirectUrl)
@@ -53,5 +55,17 @@ namespace WebServer.Server.HTTP.Response
             _headerCollection.Add(new HttpHeader(key, value));
         }
 
+
+        public bool ContainsHeader(string key)
+        {
+            return _headerCollection.ContainsKey(key);
+        }
+
+
+        public void SetCookies()
+        {
+            foreach (var c in _cookieCollection)
+                AddHeader(HttpHeader.SetCookie, c.ToString());
+        }
     }
 }
